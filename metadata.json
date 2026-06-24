@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Tile Management System",
+  "description": "A web application to manage tile inventory, orders, and quantities, designed with a right-to-left interface for Arabic users.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

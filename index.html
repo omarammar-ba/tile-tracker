@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="light">
+  <head>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          registrations.forEach(function (registration) {
+            registration.unregister();
+          });
+        });
+      }
+
+      if ("caches" in window) {
+        caches.keys().then(function (names) {
+          names.forEach(function (name) {
+            caches.delete(name);
+          });
+        });
+      }
+    </script>
+
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0284c7" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="نظام إدارة مخزون البلاط المتطور" />
+
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/vite.svg" />
+    <title>معرض عمار | إدارة المخزون</title>
+
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+
+      html {
+        -webkit-text-size-adjust: 100%;
+        -moz-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+
+      body {
+        font-family: "Tajawal", sans-serif;
+        background-color: #f8fafc;
+        color: #1e293b;
+        margin: 0;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color 0.3s, color 0.3s;
+      }
+
+      html.dark body {
+        background-color: #0f172a;
+        color: #f1f5f9;
+      }
+
+      .print-only-header {
+        display: none !important;
+      }
+
+      @media print {
+        @page {
+          size: A4 portrait;
+          margin: 0.5cm;
+        }
+
+        .print-only-header {
+          display: block !important;
+          text-align: center;
+          margin-bottom: 20px;
+          border-bottom: 2px solid black;
+          padding-bottom: 10px;
+        }
+
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          box-shadow: none !important;
+          text-shadow: none !important;
+        }
+
+        .no-print,
+        header,
+        footer,
+        nav,
+        .nav-buttons,
+        .toolbar,
+        .search-bar,
+        .install-prompt,
+        .summary-cards,
+        button,
+        input,
+        .fixed,
+        .absolute {
+          display: none !important;
+        }
+
+        body,
+        html,
+        #root,
+        #print-area {
+          background: white !important;
+          color: black !important;
+          width: 100% !important;
+          height: auto !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: visible !important;
+          display: block !important;
+          position: relative !important;
+        }
+
+        table {
+          width: 100% !important;
+          border-collapse: collapse !important;
+          border: 2px solid black !important;
+          margin-top: 10px !important;
+          font-size: 10pt !important;
+          table-layout: fixed !important;
+        }
+
+        thead {
+          display: table-header-group !important;
+        }
+
+        tr {
+          page-break-inside: avoid !important;
+          border-bottom: 1px solid black !important;
+        }
+
+        th {
+          background-color: #f0f0f0 !important;
+          color: black !important;
+          border: 1px solid black !important;
+          padding: 8px 4px !important;
+          font-weight: 900 !important;
+          text-align: center !important;
+        }
+
+        td {
+          border: 1px solid black !important;
+          padding: 6px 4px !important;
+          text-align: center !important;
+          color: black !important;
+          font-weight: 700 !important;
+          font-size: 10pt !important;
+        }
+
+        .print\:table-cell {
+          display: table-cell !important;
+        }
+
+        .print\:hidden {
+          display: none !important;
+        }
+
+        .print\:block {
+          display: block !important;
+        }
+
+        .print\:border-none {
+          border: none !important;
+        }
+      }
+
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 5px;
+        height: 5px;
+      }
+
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+      }
+    </style>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "react/": "https://esm.sh/react@^19.2.3/",
+          "react": "https://esm.sh/react@^19.2.3",
+          "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+          "firebase/": "https://esm.sh/firebase@^12.7.0/",
+          "vite": "https://esm.sh/vite@^7.3.0",
+          "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+        }
+      }
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
