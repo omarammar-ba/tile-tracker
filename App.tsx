@@ -229,8 +229,14 @@ const ReservationModal: React.FC<{ tile: Tile, onClose: () => void, onUpdateRese
 }
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [user, setUser] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      const cachedEmail = localStorage.getItem('cached_user_email');
+      if (cachedEmail) return { email: cachedEmail };
+    }
+    return null;
+  });
+  const [authLoading, setAuthLoading] = useState(!user);
   
   // Dark mode state
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -256,11 +262,43 @@ const App: React.FC = () => {
   }, []);
 
   // تقسيم البيانات لتخزينها في الذاكرة
-  const [porcelainTiles, setPorcelainTiles] = useState<Tile[]>([]);
-  const [ceramicTiles, setCeramicTiles] = useState<Tile[]>([]);
+  const [porcelainTiles, setPorcelainTiles] = useState<Tile[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('cached_porcelain_tiles');
+      if (stored) {
+          try { return JSON.parse(stored); } catch(e) {}
+      }
+    }
+    return [];
+  });
   
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [ceramicTiles, setCeramicTiles] = useState<Tile[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('cached_ceramic_tiles');
+      if (stored) {
+          try { return JSON.parse(stored); } catch(e) {}
+      }
+    }
+    return [];
+  });
+  
+  const [logs, setLogs] = useState<LogEntry[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('cached_logs');
+      if (stored) {
+          try { 
+              const parsed = JSON.parse(stored);
+              // fix timestamps
+              return parsed.map((p: any) => ({
+                 ...p,
+                 timestamp: p.timestamp && typeof p.timestamp === 'object' ? p.timestamp : (p.timestamp ? { seconds: new Date(p.timestamp).getTime() / 1000 } : new Date())
+              }));
+          } catch(e) {}
+      }
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState<boolean>(!porcelainTiles.length);
   const [editingTile, setEditingTile] = useState<Tile | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [showingQRFor, setShowingQRFor] = useState<Tile | null>(null);
@@ -280,7 +318,16 @@ const App: React.FC = () => {
   const [deviceName, setDeviceName] = useState<string>('');
 
   useEffect(() => {
-      const unsubscribe = auth.onAuthStateChanged((u) => { setUser(u); setAuthLoading(false); });
+      const unsubscribe = auth.onAuthStateChanged((u) => { 
+          if (u) {
+              localStorage.setItem('cached_user_email', u.email || '');
+              setUser(u);
+          } else {
+              localStorage.removeItem('cached_user_email');
+              if (!user) setUser(null); // only set to null if it was null, avoid flash
+          }
+          setAuthLoading(false); 
+      });
       return () => unsubscribe();
   }, []);
 
@@ -306,17 +353,31 @@ const App: React.FC = () => {
   // جلب كل البيانات (بورسلان وسيراميك) عند بدء التطبيق
   useEffect(() => {
     if (!user) return;
-    setLoading(true);
+    
+    // لا تقم بإظهار التحميل إذا كان لدينا بالفعل بيانات (من الكاش)
+    if (porcelainTiles.length === 0 && ceramicTiles.length === 0) {
+      setLoading(true);
+    }
     
     try {
+      let porcelainDone = false;
+      let ceramicsDone = false;
+      
+      const checkDone = () => {
+         if (porcelainDone && ceramicsDone) setLoading(false);
+      };
+
       // 1. مراقب البورسلان
       const unsubscribePorcelain = db.collection('tiles').orderBy('name', 'asc').onSnapshot((snapshot) => {
         if (!snapshot.empty) {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Tile[];
             setPorcelainTiles(data);
+            try { localStorage.setItem('cached_porcelain_tiles', JSON.stringify(data)); } catch(e){}
         } else {
             setPorcelainTiles([]);
         }
+        porcelainDone = true;
+        checkDone();
       });
 
       // 2. مراقب السيراميك
@@ -324,11 +385,12 @@ const App: React.FC = () => {
         if (!snapshot.empty) {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Tile[];
             setCeramicTiles(data);
+            try { localStorage.setItem('cached_ceramic_tiles', JSON.stringify(data)); } catch(e){}
         } else {
             setCeramicTiles([]);
         }
-        // إخفاء التحميل بمجرد وصول البيانات
-        setLoading(false);
+        ceramicsDone = true;
+        checkDone();
       });
 
       // 3. مراقب السجلات
@@ -336,6 +398,7 @@ const App: React.FC = () => {
           if (!snapshot.empty) {
               const logsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as LogEntry[];
               setLogs(logsData);
+              try { localStorage.setItem('cached_logs', JSON.stringify(logsData)); } catch(e){}
           }
       });
 
@@ -548,9 +611,85 @@ const App: React.FC = () => {
   const porcelainDashboardTiles = useMemo(() => getDashboardTiles(porcelainTiles), [porcelainTiles, quickSearch]);
   const ceramicDashboardTiles = useMemo(() => getDashboardTiles(ceramicTiles), [ceramicTiles, quickSearch]);
 
-  const handlePrint = useCallback(() => { window.print(); }, []);
+  const handlePrint = useCallback(() => {
+      import('html2pdf.js').then((html2pdfModule) => {
+          const html2pdf = html2pdfModule.default || html2pdfModule;
+          const title = activeCategory === 'tiles' ? 'كشف مخزون البورسلان' : 'كشف مخزون السيراميك';
+          const dateStr = new Date().toLocaleDateString('ar-EG');
+          
+          let rowsHtml = '';
+          filteredTiles.forEach(tile => {
+              const totalReserved = tile.reservations ? Object.values(tile.reservations).reduce((sum, res) => sum + res.meters, 0) : 0;
+              const availableMeters = tile.meters - totalReserved;
+              const availablePallets = tile.meters > 0 ? (availableMeters / tile.meters) * tile.pallets : 0;
+              
+              // Only include available items in the PDF to make it relevant, or include all?
+              // The user just said "all details and colors with quantities", let's include all from filteredTiles.
+              rowsHtml += `
+                  <tr style="break-inside: avoid;">
+                      <td style="border: 1px solid #000; padding: 6px;">${tile.name}</td>
+                      <td style="border: 1px solid #000; padding: 6px;">${tile.size || '120*60'}</td>
+                      <td style="border: 1px solid #000; padding: 6px;">${tile.surface}</td>
+                      <td style="border: 1px solid #000; padding: 6px;">${tile.quality}</td>
+                      <td style="border: 1px solid #000; padding: 6px;">${tile.shade || '-'}</td>
+                      <td style="border: 1px solid #000; padding: 6px; font-weight: bold; font-size: 14px;">${availableMeters.toFixed(2)}</td>
+                      <td style="border: 1px solid #000; padding: 6px;">${availablePallets.toFixed(1)}</td>
+                  </tr>
+              `;
+          });
 
-  if (authLoading) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900"><div className="w-16 h-16 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mb-4"></div><div className="text-sky-800 dark:text-sky-400 font-bold text-lg">جاري تحميل معرض عمار...</div></div>;
+          const htmlContent = `
+              <div style="direction: rtl; font-family: sans-serif; padding: 15px; color: #000; background: #fff;">
+                  <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">
+                      <h1 style="margin: 0 0 5px 0; font-size: 24px; font-weight: bold;">معرض عمار للسيراميك - ${title}</h1>
+                      <p style="margin: 0; font-size: 14px;">تاريخ الطباعة: ${dateStr}</p>
+                  </div>
+                  <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 12px;">
+                      <thead>
+                          <tr style="background-color: #f0f0f0;">
+                              <th style="border: 1px solid #000; padding: 8px; font-weight: bold;">اسم الصنف</th>
+                              <th style="border: 1px solid #000; padding: 8px; font-weight: bold;">المقاس</th>
+                              <th style="border: 1px solid #000; padding: 8px; font-weight: bold;">السطح</th>
+                              <th style="border: 1px solid #000; padding: 8px; font-weight: bold;">النخب</th>
+                              <th style="border: 1px solid #000; padding: 8px; font-weight: bold;">الشيد</th>
+                              <th style="border: 1px solid #000; padding: 8px; font-weight: bold;">المتوفر م²</th>
+                              <th style="border: 1px solid #000; padding: 8px; font-weight: bold;">طبليات</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          ${rowsHtml}
+                      </tbody>
+                  </table>
+              </div>
+          `;
+
+          const tempContainer = document.createElement('div');
+          tempContainer.innerHTML = htmlContent;
+          document.body.appendChild(tempContainer);
+
+          const opt = {
+              margin:       10,
+              filename:     `كشف-مخزون-${activeCategory === 'tiles' ? 'البورسلان' : 'السيراميك'}.pdf`,
+              image:        { type: 'jpeg' as const, quality: 0.98 },
+              html2canvas:  { scale: 2, useCORS: true },
+              jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+          };
+
+          html2pdf().set(opt).from(tempContainer).save().then(() => {
+              document.body.removeChild(tempContainer);
+          });
+      });
+  }, [filteredTiles, activeCategory]);
+
+  if (authLoading) {
+    return (
+        <div className="fixed inset-0 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 z-50">
+            <div className="w-20 h-20 border-8 border-sky-100 dark:border-sky-900/30 border-t-sky-600 dark:border-t-sky-500 rounded-full animate-spin mb-6 shadow-xl"></div>
+            <div className="text-sky-800 dark:text-sky-400 font-black text-2xl animate-pulse">جاري تحميل معرض عمار...</div>
+            <div className="text-slate-400 text-sm mt-2 font-bold">يرجى الانتظار</div>
+        </div>
+    );
+  }
   if (!user) return <Login onLoginSuccess={(e) => setUser({email: e})} />;
 
   return (
@@ -660,6 +799,7 @@ const App: React.FC = () => {
                             viewMode="preview" 
                             onShowQR={setShowingQRFor}
                             activeCategory="tiles"
+                            logs={logs}
                         />
                     ) : (
                         <TileList 
@@ -672,6 +812,7 @@ const App: React.FC = () => {
                             viewMode="preview" 
                             onShowQR={setShowingQRFor}
                             activeCategory="ceramics"
+                            logs={logs}
                         />
                     )}
 
@@ -710,7 +851,7 @@ const App: React.FC = () => {
                              {activeCategory === 'tiles' ? 'كشف مخزون البورسلان' : 'كشف مخزون السيراميك'}
                         </h1>
                     </div>
-                    <TileList tiles={filteredTiles} onEdit={handleEditClick} onDelete={setDeleteTargetId} onOpenReservation={setReservingTile} onViewImage={setViewingImage} viewMode="full" onShowQR={setShowingQRFor} activeCategory={activeCategory} />
+                    <TileList tiles={filteredTiles} logs={logs} onEdit={handleEditClick} onDelete={setDeleteTargetId} onOpenReservation={setReservingTile} onViewImage={setViewingImage} viewMode="full" onShowQR={setShowingQRFor} activeCategory={activeCategory} />
                 </div>
             </div>
         )}
@@ -727,3 +868,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
