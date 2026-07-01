@@ -51,7 +51,7 @@ const LogHistory: React.FC<LogHistoryProps> = ({ logs }) => {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-[2rem] shadow-xl border border-slate-100 dark:border-slate-700 mt-2 mb-8 no-print overflow-hidden transition-colors" dir="rtl">
+    <div className="bg-white dark:bg-slate-800 rounded-[2rem] shadow-xl border border-slate-100 dark:border-slate-700 mt-2 mb-8 no-print overflow-hidden transition-colors flex flex-col" dir="rtl">
       
       {logs.length === 0 ? (
         <div className="text-center py-20 px-6">
@@ -106,4 +106,5 @@ const LogHistory: React.FC<LogHistoryProps> = ({ logs }) => {
   );
 };
 
+export default LogHistory;
 export default LogHistory;
