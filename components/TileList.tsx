@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Tile } from '../types';
+import { Tile, LogEntry } from '../types';
 import { EditIcon, DeleteIcon, QRIcon } from './Icons';
 
 interface TileListProps {
@@ -13,28 +13,42 @@ interface TileListProps {
   viewMode: 'preview' | 'full';
   onShowQR: (tile: Tile) => void;
   activeCategory?: 'tiles' | 'ceramics';
+  logs?: LogEntry[];
 }
 
-const TileList: React.FC<TileListProps> = ({ tiles, loading, onEdit, onDelete, onOpenReservation, onViewImage, viewMode, onShowQR, activeCategory = 'tiles' }) => {
+const TileList: React.FC<TileListProps> = ({ tiles, loading, onEdit, onDelete, onOpenReservation, onViewImage, viewMode, onShowQR, activeCategory = 'tiles', logs = [] }) => {
   
-  // حالة للتحكم في العرض التدريجي - نبدأ بـ 40 عنصر لضمان سرعة التبديل
-  const [displayLimit, setDisplayLimit] = useState(40);
+  const [displayLimit, setDisplayLimit] = useState(50);
+  const observerTarget = React.useRef<HTMLDivElement>(null);
 
   // عند تغيير القسم أو البيانات، نعيد تعيين العداد للبداية
   useEffect(() => {
-    setDisplayLimit(40);
+    setDisplayLimit(50);
   }, [activeCategory, tiles]);
 
-  // زيادة العداد تلقائياً حتى يغطي كل القائمة (بدون تدخل المستخدم)
+  // زيادة العداد عند الوصول لنهاية القائمة
   useEffect(() => {
-    if (displayLimit < tiles.length) {
-       // نستخدم مؤقت قصير جداً للسماح للمتصفح بالرسم قبل تحميل الدفعة التالية
-       const timer = setTimeout(() => {
-           // نزيد 100 عنصر في كل دفعة
-           setDisplayLimit(prev => prev + 100);
-       }, 50);
-       return () => clearTimeout(timer);
-    }
+    const target = observerTarget.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && displayLimit < tiles.length) {
+          setDisplayLimit(prev => Math.min(prev + 30, tiles.length));
+        }
+      },
+      {
+        root: null, // يستخدم النافذة أو الحاوية الأقرب
+        rootMargin: '200px', // تحميل قبل الوصول بـ 200 بيكسل
+        threshold: 0.1
+      }
+    );
+
+    observer.observe(target);
+
+    return () => {
+      if (target) observer.unobserve(target);
+    };
   }, [displayLimit, tiles.length]);
 
   const containerStyles = viewMode === 'preview' 
@@ -103,6 +117,20 @@ const TileList: React.FC<TileListProps> = ({ tiles, loading, onEdit, onDelete, o
                     const availableMeters = tile.meters - totalReserved;
                     const availablePallets = tile.meters > 0 ? (availableMeters / tile.meters) * tile.pallets : 0;
                     const displaySize = tile.size || '120*60';
+                    
+                    let lastUpdateStr = 'غير معروف';
+                    if (logs && logs.length > 0) {
+                        const tileLogs = logs.filter(log => log.tileName === tile.name && (log.action === 'تعديل' || log.action === 'إضافة' || log.action === 'تعديل حجز'));
+                        if (tileLogs.length > 0) {
+                            const latestLog = tileLogs[0];
+                            if (latestLog && latestLog.timestamp) {
+                                const dateObj = latestLog.timestamp.seconds ? new Date(latestLog.timestamp.seconds * 1000) : new Date(latestLog.timestamp);
+                                if (!isNaN(dateObj.getTime())) {
+                                    lastUpdateStr = dateObj.toLocaleDateString('ar-EG', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                }
+                            }
+                        }
+                    }
 
                     return (
                         <tr key={tile.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all group print:hover:bg-transparent print:break-inside-avoid">
@@ -119,10 +147,15 @@ const TileList: React.FC<TileListProps> = ({ tiles, loading, onEdit, onDelete, o
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <div className="text-xs md:text-lg font-black text-slate-800 dark:text-slate-100 leading-tight mb-1 whitespace-normal break-words">{tile.name}</div>
-                                    <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1">
+                                    <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400 font-bold flex flex-wrap items-center gap-1 mb-1">
                                         <span className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-600 whitespace-nowrap text-slate-700 dark:text-slate-300">{tile.quality}</span>
                                         <span className="text-slate-300 dark:text-slate-600">|</span>
                                         <span className={`${isCeramic ? 'text-rose-600 dark:text-rose-400' : 'text-sky-600 dark:text-sky-400'} whitespace-nowrap`}>{tile.surface}</span>
+                                    </div>
+                                    <div className="mt-1 w-fit">
+                                        <span className="text-[8px] md:text-[9px] text-slate-400 dark:text-slate-500 font-medium bg-slate-50 dark:bg-slate-800/60 px-2 py-0.5 rounded-full border border-slate-100 dark:border-slate-700 flex items-center gap-1 w-max">
+                                            تحديث: <span className="text-slate-600 dark:text-slate-300 font-bold">{lastUpdateStr}</span>
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -204,10 +237,20 @@ const TileList: React.FC<TileListProps> = ({ tiles, loading, onEdit, onDelete, o
                 
                 </tbody>
             </table>
+            
+            {/* Observer Target for Infinite Scroll */}
+            {displayLimit < tiles.length && (
+              <div ref={observerTarget} className="py-4 flex justify-center items-center">
+                  <div className={`w-5 h-5 border-4 ${isCeramic ? 'border-rose-500' : 'border-sky-500'} border-t-transparent rounded-full animate-spin`}></div>
+                  <span className="mr-2 text-sm text-slate-500 font-bold">جاري تحميل المزيد...</span>
+              </div>
+            )}
+            
             </div>
       </div>
     </div>
   );
 };
 
+export default React.memo(TileList);
 export default React.memo(TileList);
