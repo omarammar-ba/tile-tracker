@@ -18,12 +18,12 @@ interface TileListProps {
 
 const TileList: React.FC<TileListProps> = ({ tiles, loading, onEdit, onDelete, onOpenReservation, onViewImage, viewMode, onShowQR, activeCategory = 'tiles', logs = [] }) => {
   
-  const [displayLimit, setDisplayLimit] = useState(50);
+  const [displayLimit, setDisplayLimit] = useState(20);
   const observerTarget = React.useRef<HTMLDivElement>(null);
 
   // عند تغيير القسم أو البيانات، نعيد تعيين العداد للبداية
   useEffect(() => {
-    setDisplayLimit(50);
+    setDisplayLimit(20);
   }, [activeCategory, tiles]);
 
   // زيادة العداد عند الوصول لنهاية القائمة
@@ -253,4 +253,4 @@ const TileList: React.FC<TileListProps> = ({ tiles, loading, onEdit, onDelete, o
 };
 
 export default React.memo(TileList);
-export default React.memo(TileList);
+xport default React.memo(TileList);
